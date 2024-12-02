@@ -26,16 +26,20 @@ void PatchAPFS(KernelPatcher &patcher, size_t index, mach_vm_address_t address, 
 	KernelPatcher::RouteRequest req("_apfs_root_snapshot_select", selectSnapshotPatch);
 	if (!patcher.routeMultiple(index, &req, 1))
 		panic("Failed to route apfs_root_snapshot_select!");
+	auto apfs_vfsop_mount = patcher.solveSymbol(index, "_apfs_vfsop_mount");
 	if (getKernelVersion() >= KernelVersion::Sonoma) {
 		KernelPatcher::RouteRequest req("_apfs_mount_upgrade_checks", RetZero);
 		if (!patcher.routeMultiple(index, &req, 1))
 			panic("Failed to route apfs_mount_upgrade_checks!");
-	} else {
+	} else if (getKernelVersion() == KernelVersion::Ventura){
 		KernelPatcher::RouteRequest req("_apfs_allow_root_update", RetOne);
 		if (!patcher.routeMultiple(index, &req, 1))
 			panic("Failed to route apfs_allow_root_update!");
+	} else {
+		if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, oldRWPatchOrig, sizeof(oldRWPatchOrig), oldRWPatchMask, sizeof(oldRWPatchMask), oldRWPatchReplace, sizeof(oldRWPatchReplace), oldRWPatchReplaceMask, sizeof(oldRWPatchReplaceMask))) {
+			panic("Failed to patch apfs_vfsop_mount RW patch!");
+		}
 	}
-	auto apfs_vfsop_mount = patcher.solveSymbol(index, "_apfs_vfsop_mount");
 	size_t dataOffset = 0;
 	if (!KernelPatcher::findPattern(apfsVfsopMountOrig, apfsVfsopMountMask, sizeof(apfsVfsopMountOrig), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
 		panic("Failed to find apfs_vfsop_mount LiveFS patch!");
