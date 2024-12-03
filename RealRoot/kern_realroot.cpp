@@ -101,11 +101,14 @@ void PatchAPFS(KernelPatcher &patcher, size_t index, mach_vm_address_t address, 
 	size_t offset = 0;
 	switch (getKernelVersion()) {
 		case BigSur:
-			offset = 0x9;
+			offset = 0x10;
+			break;
 		case Monterey:
 			offset = 0x12;
+			break;
 		default:
 			offset = 0x15;
+			break;
 	}
 	mach_vm_address_t patchPoint = apfs_vfsop_mount + dataOffset + offset;
 	if (*(uint8_t *)(patchPoint + 1) == 0x85) { // jne
@@ -113,10 +116,12 @@ void PatchAPFS(KernelPatcher &patcher, size_t index, mach_vm_address_t address, 
 		for (int i = 0; i < 6; i++) {
 			*(uint8_t *)(patchPoint + i) = 0x90;
 		}
-	} else {
+	} else if (*(uint8_t *)(patchPoint + 1) == 0x84) {
 		// force jump
 		*(uint8_t *)(patchPoint) = 0x90;
 		*(uint8_t *)(patchPoint + 1) = 0xe9;
+	} else {
+		panic("LiveFS patch has a bad offset!!!");
 	}
 	MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 }
