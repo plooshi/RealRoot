@@ -61,8 +61,12 @@ void PatchAPFS(KernelPatcher &patcher, size_t index, mach_vm_address_t address, 
 		KernelPatcher::RouteRequest req("_apfs_root_snapshot_select", selectSnapshotPatch);
 		if (!patcher.routeMultiple(index, &req, 1))
 			panic("Failed to route apfs_root_snapshot_select!");
-	} else {
+	} else if (getKernelVersion() == KernelVersion::Monterey) {
 		if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, SnapshotOrig, arrsize(SnapshotOrig), SnapshotMask, arrsize(SnapshotMask), SnapshotReplace, arrsize(SnapshotReplace), SnapshotReplaceMask, arrsize(SnapshotReplaceMask))) {
+			panic("Failed to patch apfs_root_snapshot_select!");
+		}
+	} else {
+		if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, SnapshotOrigBigSur, arrsize(SnapshotOrigBigSur), SnapshotMaskBigSur, arrsize(SnapshotMaskBigSur), SnapshotReplaceBigSur, arrsize(SnapshotReplaceBigSur), SnapshotReplaceMaskBigSur, arrsize(SnapshotReplaceMaskBigSur))) {
 			panic("Failed to patch apfs_root_snapshot_select!");
 		}
 	}
@@ -84,13 +88,26 @@ void PatchAPFS(KernelPatcher &patcher, size_t index, mach_vm_address_t address, 
 		if (!KernelPatcher::findPattern(apfsVfsopMountOrig, apfsVfsopMountMask, arrsize(apfsVfsopMountOrig), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
 			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
 		}
+	} else if (getKernelVersion() == KernelVersion::Monterey) {
+		if (!KernelPatcher::findPattern(apfsVfsopMountOrigMonterey, apfsVfsopMountMaskMonterey, arrsize(apfsVfsopMountOrigMonterey), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
+			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
+		}
 	} else {
-		if (!KernelPatcher::findPattern(apfsVfsopMountOrigBSM, apfsVfsopMountMaskBSM, arrsize(apfsVfsopMountOrigBSM), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
+		if (!KernelPatcher::findPattern(apfsVfsopMountOrigBigSur, apfsVfsopMountMaskBigSur, arrsize(apfsVfsopMountOrigBigSur), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
 			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
 		}
 	}
 	MachInfo::setKernelWriting(true, KernelPatcher::kernelWriteLock);
-	mach_vm_address_t patchPoint = apfs_vfsop_mount + dataOffset + (getKernelVersion() >= KernelVersion::Ventura ? 0x15 : 0x12);
+	size_t offset = 0;
+	switch (getKernelVersion()) {
+		case BigSur:
+			offset = 0x9;
+		case Monterey:
+			offset = 0x12;
+		default:
+			offset = 0x15;
+	}
+	mach_vm_address_t patchPoint = apfs_vfsop_mount + dataOffset + offset;
 	if (*(uint8_t *)(patchPoint + 1) == 0x85) { // jne
 		// replace entire call w/ nop
 		for (int i = 0; i < 6; i++) {
