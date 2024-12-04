@@ -43,6 +43,11 @@ static const char *kextAPFSPath[] { "/System/Library/Extensions/apfs.kext/Conten
 
 static KernelPatcher::KextInfo kextAPFS { "com.apple.filesystems.apfs", kextAPFSPath, 1, {true, true}, {}, KernelPatcher::KextInfo::Unloaded };
 
+
+static const char *kextSandboxPath[] { "/System/Library/Extensions/Sandbox.kext/Contents/MacOS/Sandbox" };
+
+static KernelPatcher::KextInfo kextSandbox { "com.apple.security.sandbox", kextSandboxPath, 1, {true, true}, {}, KernelPatcher::KextInfo::Unloaded };
+
 uint64_t selectSnapshotPatch(void *_Arg1, void *_Arg2, void **Arg3) {
 	*Arg3 = nullptr;
 	return 0;
@@ -134,6 +139,15 @@ void PatchAPFS(void *_user, KernelPatcher &patcher, size_t index, mach_vm_addres
 	}
 }
 
+void PatchSandbox(void *_user, KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
+	if (kextSandbox.loadIndex == index) {
+		auto apply_rootless_modifier = patcher.solveSymbol(index, "_apply_rootless_modifier");
+		if (!KernelPatcher::findAndReplaceWithMask((void *) apply_rootless_modifier, 32768, RootlessOrig, arrsize(RootlessOrig), RootlessMask, arrsize(RootlessMask), RootlessReplace, arrsize(RootlessReplace), RootlessReplaceMask, arrsize(RootlessReplaceMask))) {
+			panic("Failed to patch apply_rootless_modifier!");
+		}
+	}
+}
+
 mach_vm_address_t getKernelBase() {
 #ifdef LILU_COMPRESSION_SUPPORT
 	static constexpr const char *prelinkKernelPaths[7] {
@@ -193,4 +207,5 @@ void PatchKernel(void *_user, KernelPatcher &patcher) {
 void InitRealRoot() {
 	lilu.onPatcherLoadForce(PatchKernel);
 	lilu.onKextLoadForce(&kextAPFS, 1, PatchAPFS);
+	if (getKernelVersion() >= KernelVersion::Ventura) lilu.onKextLoadForce(&kextSandbox, 1, PatchSandbox);
 }
