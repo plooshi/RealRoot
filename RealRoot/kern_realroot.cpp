@@ -101,7 +101,13 @@ void PatchAPFS(KernelPatcher &patcher, size_t index, mach_vm_address_t address, 
 	size_t offset = 0;
 	switch (getKernelVersion()) {
 		case BigSur:
-			offset = 0x10;
+			for (int i = 0; i < 0x30; i++) {
+				if (*(uint8_t *)(apfs_vfsop_mount + dataOffset + i) == 0x0f && (*(uint8_t *)(apfs_vfsop_mount + dataOffset + i + 1) & 0xfe) == 0x84) {
+					offset = i;
+					break;
+				}
+			}
+			if (!offset) panic("Failed to find j(n)e for LiveFS patch!");
 			break;
 		case Monterey:
 			offset = 0x12;
