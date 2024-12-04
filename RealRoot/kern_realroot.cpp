@@ -55,81 +55,83 @@ uint32_t RetOne() {
 	return 1;
 }
 
-void PatchAPFS(KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
-	auto apfs_vfsop_mount = patcher.solveSymbol(index, "_apfs_vfsop_mount");
-	if (getKernelVersion() >= KernelVersion::Ventura) {
-		KernelPatcher::RouteRequest req("_apfs_root_snapshot_select", selectSnapshotPatch);
-		if (!patcher.routeMultiple(index, &req, 1))
-			panic("Failed to route apfs_root_snapshot_select!");
-	} else if (getKernelVersion() == KernelVersion::Monterey) {
-		if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, SnapshotOrig, arrsize(SnapshotOrig), SnapshotMask, arrsize(SnapshotMask), SnapshotReplace, arrsize(SnapshotReplace), SnapshotReplaceMask, arrsize(SnapshotReplaceMask))) {
-			panic("Failed to patch apfs_root_snapshot_select!");
-		}
-	} else {
-		if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, SnapshotOrigBigSur, arrsize(SnapshotOrigBigSur), SnapshotMaskBigSur, arrsize(SnapshotMaskBigSur), SnapshotReplaceBigSur, arrsize(SnapshotReplaceBigSur), SnapshotReplaceMaskBigSur, arrsize(SnapshotReplaceMaskBigSur))) {
-			panic("Failed to patch apfs_root_snapshot_select!");
-		}
-	}
-	if (getKernelVersion() >= KernelVersion::Sonoma) {
-		KernelPatcher::RouteRequest req("_apfs_mount_upgrade_checks", RetZero);
-		if (!patcher.routeMultiple(index, &req, 1))
-			panic("Failed to route apfs_mount_upgrade_checks!");
-	} else if (getKernelVersion() == KernelVersion::Ventura){
-		KernelPatcher::RouteRequest req("_apfs_allow_root_update", RetOne);
-		if (!patcher.routeMultiple(index, &req, 1))
-			panic("Failed to route apfs_allow_root_update!");
-	} else {
-		if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, oldRWPatchOrig, arrsize(oldRWPatchOrig), oldRWPatchMask, arrsize(oldRWPatchMask), oldRWPatchReplace, arrsize(oldRWPatchReplace), oldRWPatchReplaceMask, arrsize(oldRWPatchReplaceMask))) {
-			panic("Failed to patch apfs_vfsop_mount RW patch!");
-		}
-	}
-	size_t dataOffset = 0;
-	if (getKernelVersion() >= KernelVersion::Ventura) {
-		if (!KernelPatcher::findPattern(apfsVfsopMountOrig, apfsVfsopMountMask, arrsize(apfsVfsopMountOrig), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
-			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
-		}
-	} else if (getKernelVersion() == KernelVersion::Monterey) {
-		if (!KernelPatcher::findPattern(apfsVfsopMountOrigMonterey, apfsVfsopMountMaskMonterey, arrsize(apfsVfsopMountOrigMonterey), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
-			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
-		}
-	} else {
-		if (!KernelPatcher::findPattern(apfsVfsopMountOrigBigSur, apfsVfsopMountMaskBigSur, arrsize(apfsVfsopMountOrigBigSur), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
-			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
-		}
-	}
-	MachInfo::setKernelWriting(true, KernelPatcher::kernelWriteLock);
-	size_t offset = 0;
-	switch (getKernelVersion()) {
-		case BigSur:
-			for (int i = 0; i < 0x30; i++) {
-				if (*(uint8_t *)(apfs_vfsop_mount + dataOffset + i) == 0x0f && (*(uint8_t *)(apfs_vfsop_mount + dataOffset + i + 1) & 0xfe) == 0x84) {
-					offset = i;
-					break;
-				}
+void PatchAPFS(void *_user, KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
+	if (kextAPFS.loadIndex == index) {
+		auto apfs_vfsop_mount = patcher.solveSymbol(index, "_apfs_vfsop_mount");
+		if (getKernelVersion() >= KernelVersion::Ventura) {
+			KernelPatcher::RouteRequest req("_apfs_root_snapshot_select", selectSnapshotPatch);
+			if (!patcher.routeMultiple(index, &req, 1))
+				panic("Failed to route apfs_root_snapshot_select!");
+		} else if (getKernelVersion() == KernelVersion::Monterey) {
+			if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, SnapshotOrig, arrsize(SnapshotOrig), SnapshotMask, arrsize(SnapshotMask), SnapshotReplace, arrsize(SnapshotReplace), SnapshotReplaceMask, arrsize(SnapshotReplaceMask))) {
+				panic("Failed to patch apfs_root_snapshot_select!");
 			}
-			if (!offset) panic("Failed to find j(n)e for LiveFS patch!");
-			break;
-		case Monterey:
-			offset = 0x12;
-			break;
-		default:
-			offset = 0x15;
-			break;
-	}
-	mach_vm_address_t patchPoint = apfs_vfsop_mount + dataOffset + offset;
-	if (*(uint8_t *)(patchPoint + 1) == 0x85) { // jne
-		// replace entire call w/ nop
-		for (int i = 0; i < 6; i++) {
-			*(uint8_t *)(patchPoint + i) = 0x90;
+		} else {
+			if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, SnapshotOrigBigSur, arrsize(SnapshotOrigBigSur), SnapshotMaskBigSur, arrsize(SnapshotMaskBigSur), SnapshotReplaceBigSur, arrsize(SnapshotReplaceBigSur), SnapshotReplaceMaskBigSur, arrsize(SnapshotReplaceMaskBigSur))) {
+				panic("Failed to patch apfs_root_snapshot_select!");
+			}
 		}
-	} else if (*(uint8_t *)(patchPoint + 1) == 0x84) {
-		// force jump
-		*(uint8_t *)(patchPoint) = 0x90;
-		*(uint8_t *)(patchPoint + 1) = 0xe9;
-	} else {
-		panic("LiveFS patch has a bad offset!!!");
+		if (getKernelVersion() >= KernelVersion::Sonoma) {
+			KernelPatcher::RouteRequest req("_apfs_mount_upgrade_checks", RetZero);
+			if (!patcher.routeMultiple(index, &req, 1))
+				panic("Failed to route apfs_mount_upgrade_checks!");
+		} else if (getKernelVersion() == KernelVersion::Ventura){
+			KernelPatcher::RouteRequest req("_apfs_allow_root_update", RetOne);
+			if (!patcher.routeMultiple(index, &req, 1))
+				panic("Failed to route apfs_allow_root_update!");
+		} else {
+			if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, oldRWPatchOrig, arrsize(oldRWPatchOrig), oldRWPatchMask, arrsize(oldRWPatchMask), oldRWPatchReplace, arrsize(oldRWPatchReplace), oldRWPatchReplaceMask, arrsize(oldRWPatchReplaceMask))) {
+				panic("Failed to patch apfs_vfsop_mount RW patch!");
+			}
+		}
+		size_t dataOffset = 0;
+		if (getKernelVersion() >= KernelVersion::Ventura) {
+			if (!KernelPatcher::findPattern(apfsVfsopMountOrig, apfsVfsopMountMask, arrsize(apfsVfsopMountOrig), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
+				panic("Failed to find apfs_vfsop_mount LiveFS patch!");
+			}
+		} else if (getKernelVersion() == KernelVersion::Monterey) {
+			if (!KernelPatcher::findPattern(apfsVfsopMountOrigMonterey, apfsVfsopMountMaskMonterey, arrsize(apfsVfsopMountOrigMonterey), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
+				panic("Failed to find apfs_vfsop_mount LiveFS patch!");
+			}
+		} else {
+			if (!KernelPatcher::findPattern(apfsVfsopMountOrigBigSur, apfsVfsopMountMaskBigSur, arrsize(apfsVfsopMountOrigBigSur), (void *) apfs_vfsop_mount, 32768, &dataOffset)) {
+				panic("Failed to find apfs_vfsop_mount LiveFS patch!");
+			}
+		}
+		MachInfo::setKernelWriting(true, KernelPatcher::kernelWriteLock);
+		size_t offset = 0;
+		switch (getKernelVersion()) {
+			case BigSur:
+				for (int i = 0; i < 0x30; i++) {
+					if (*(uint8_t *)(apfs_vfsop_mount + dataOffset + i) == 0x0f && (*(uint8_t *)(apfs_vfsop_mount + dataOffset + i + 1) & 0xfe) == 0x84) {
+						offset = i;
+						break;
+					}
+				}
+				if (!offset) panic("Failed to find j(n)e for LiveFS patch!");
+				break;
+			case Monterey:
+				offset = 0x12;
+				break;
+			default:
+				offset = 0x15;
+				break;
+		}
+		mach_vm_address_t patchPoint = apfs_vfsop_mount + dataOffset + offset;
+		if (*(uint8_t *)(patchPoint + 1) == 0x85) { // jne
+			// replace entire call w/ nop
+			for (int i = 0; i < 6; i++) {
+				*(uint8_t *)(patchPoint + i) = 0x90;
+			}
+		} else if (*(uint8_t *)(patchPoint + 1) == 0x84) {
+			// force jump
+			*(uint8_t *)(patchPoint) = 0x90;
+			*(uint8_t *)(patchPoint + 1) = 0xe9;
+		} else {
+			panic("LiveFS patch has a bad offset!!!");
+		}
+		MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 	}
-	MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 }
 
 mach_vm_address_t getKernelBase() {
@@ -170,7 +172,7 @@ mach_vm_address_t getKernelBase() {
 	return kbase;
 }
 
-void PatchKernel(KernelPatcher &patcher) {
+void PatchKernel(void *_user, KernelPatcher &patcher) {
 	auto searchBase = patcher.solveSymbol(0, "_pivot_root");
 	size_t searchSize = 32768;
 	if (!searchBase) {
@@ -189,11 +191,6 @@ void PatchKernel(KernelPatcher &patcher) {
 }
 
 void InitRealRoot() {
-	lilu.onPatcherLoadForce([](void *user, KernelPatcher &patcher) {
-		PatchKernel(patcher);
-	});
-	lilu.onKextLoadForce(&kextAPFS, 1,
-	[](void *user, KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
-		if (kextAPFS.loadIndex == index) PatchAPFS(patcher, index, address, size);
-	});
+	lilu.onPatcherLoadForce(PatchKernel);
+	lilu.onKextLoadForce(&kextAPFS, 1, PatchAPFS);
 }
