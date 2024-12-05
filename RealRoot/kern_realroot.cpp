@@ -143,22 +143,25 @@ void PatchSandbox(void *_user, KernelPatcher &patcher, size_t index, mach_vm_add
 	if (kextSandbox.loadIndex == index) {
 		auto apply_rootless_modifier = patcher.solveSymbol(index, "_apply_rootless_modifier");
 		auto sb_evaluate_internal = patcher.solveSymbol(index, "_sb_evaluate_internal");
+		auto patchBase = getKernelVersion() >= KernelVersion::Ventura ? apply_rootless_modifier : sb_evaluate_internal;
 		size_t dataOffset = 0;
-		if (!KernelPatcher::findPattern(RootlessOrig, RootlessMask, arrsize(RootlessOrig), (void *) (getKernelVersion() >= KernelVersion::Ventura ? apply_rootless_modifier : sb_evaluate_internal), 32768, &dataOffset)) {
-			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
+		if (!KernelPatcher::findPattern(RootlessOrig, RootlessMask, arrsize(RootlessOrig), (void *) patchBase, 32768, &dataOffset)) {
+			panic("Failed to find sandbox patch!");
 		}
-		mach_vm_address_t patchPoint = (getKernelVersion() >= KernelVersion::Ventura ? apply_rootless_modifier : sb_evaluate_internal) + dataOffset + 0xc;
-		if (*(uint8_t *)patchPoint == 0x75) { // jne
+		MachInfo::setKernelWriting(true, KernelPatcher::kernelWriteLock);
+		mach_vm_address_t patchPoint = patchBase + dataOffset + 0xc;
+		if (*(uint8_t *) patchPoint == 0x75) { // jne
 			// replace entire call w/ nop
 			for (int i = 0; i < 2; i++) {
 				*(uint8_t *)(patchPoint + i) = 0x90;
 			}
-		} else if (*(uint8_t *)(patchPoint + 1) == 0x84) {
+		} else if (*(uint8_t *) patchPoint == 0x74) {
 			// force jump
 			*(uint8_t *) patchPoint = 0xeb;
 		} else {
 			panic("Sandbox patch has a bad offset!!");
 		}
+		MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 	}
 }
 
@@ -221,5 +224,5 @@ void PatchKernel(void *_user, KernelPatcher &patcher) {
 void InitRealRoot() {
 	lilu.onPatcherLoadForce(PatchKernel);
 	lilu.onKextLoadForce(&kextAPFS, 1, PatchAPFS);
-	if (getKernelVersion() >= KernelVersion::Ventura) lilu.onKextLoadForce(&kextSandbox, 1, PatchSandbox);
+	lilu.onKextLoadForce(&kextSandbox, 1, PatchSandbox);
 }
