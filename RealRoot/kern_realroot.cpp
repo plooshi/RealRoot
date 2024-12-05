@@ -133,7 +133,7 @@ void PatchAPFS(void *_user, KernelPatcher &patcher, size_t index, mach_vm_addres
 			*(uint8_t *)(patchPoint) = 0x90;
 			*(uint8_t *)(patchPoint + 1) = 0xe9;
 		} else {
-			panic("LiveFS patch has a bad offset!!!");
+			panic("LiveFS patch has a bad offset!!");
 		}
 		MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 	}
@@ -142,8 +142,22 @@ void PatchAPFS(void *_user, KernelPatcher &patcher, size_t index, mach_vm_addres
 void PatchSandbox(void *_user, KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
 	if (kextSandbox.loadIndex == index) {
 		auto apply_rootless_modifier = patcher.solveSymbol(index, "_apply_rootless_modifier");
-		if (!KernelPatcher::findAndReplaceWithMask((void *) apply_rootless_modifier, 32768, RootlessOrig, arrsize(RootlessOrig), RootlessMask, arrsize(RootlessMask), RootlessReplace, arrsize(RootlessReplace), RootlessReplaceMask, arrsize(RootlessReplaceMask))) {
-			panic("Failed to patch apply_rootless_modifier!");
+		auto sb_evaluate_internal = patcher.solveSymbol(index, "_sb_evaluate_internal");
+		size_t dataOffset = 0;
+		if (!KernelPatcher::findPattern(RootlessOrig, RootlessMask, arrsize(RootlessOrig), (void *) (getKernelVersion() >= KernelVersion::Ventura ? apply_rootless_modifier : sb_evaluate_internal), 32768, &dataOffset)) {
+			panic("Failed to find apfs_vfsop_mount LiveFS patch!");
+		}
+		mach_vm_address_t patchPoint = (getKernelVersion() >= KernelVersion::Ventura ? apply_rootless_modifier : sb_evaluate_internal) + dataOffset + 0xc;
+		if (*(uint8_t *)patchPoint == 0x75) { // jne
+			// replace entire call w/ nop
+			for (int i = 0; i < 2; i++) {
+				*(uint8_t *)(patchPoint + i) = 0x90;
+			}
+		} else if (*(uint8_t *)(patchPoint + 1) == 0x84) {
+			// force jump
+			*(uint8_t *) patchPoint = 0xeb;
+		} else {
+			panic("Sandbox patch has a bad offset!!");
 		}
 	}
 }
