@@ -48,25 +48,16 @@ static const char *kextSandboxPath[] { "/System/Library/Extensions/Sandbox.kext/
 
 static KernelPatcher::KextInfo kextSandbox { "com.apple.security.sandbox", kextSandboxPath, 1, {true, true}, {}, KernelPatcher::KextInfo::Unloaded };
 
-uint64_t selectSnapshotPatch(void *_Arg1, void *_Arg2, void **Arg3) {
-	*Arg3 = nullptr;
-	return 0;
-}
-
-uint32_t RetZero() {
-	return 0;
-}
-uint32_t RetOne() {
-	return 1;
-}
-
 void PatchAPFS(void *_user, KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
 	if (kextAPFS.loadIndex == index) {
 		auto apfs_vfsop_mount = patcher.solveSymbol(index, "_apfs_vfsop_mount");
 		if (getKernelVersion() >= KernelVersion::Ventura) {
-			KernelPatcher::RouteRequest req("_apfs_root_snapshot_select", selectSnapshotPatch);
-			if (!patcher.routeMultiple(index, &req, 1))
-				panic("Failed to route apfs_root_snapshot_select!");
+			auto apfs_root_snapshot_select = patcher.solveSymbol(index, "_apfs_root_snapshot_select");
+			MachInfo::setKernelWriting(true, KernelPatcher::kernelWriteLock);
+			for (int i = 0; i < arrsize(snapshotShc); i++) {
+				*(uint8_t *)(apfs_root_snapshot_select + i) = snapshotShc[i];
+			}
+			MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 		} else if (getKernelVersion() == KernelVersion::Monterey) {
 			if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, SnapshotOrig, arrsize(SnapshotOrig), SnapshotMask, arrsize(SnapshotMask), SnapshotReplace, arrsize(SnapshotReplace), SnapshotReplaceMask, arrsize(SnapshotReplaceMask))) {
 				panic("Failed to patch apfs_root_snapshot_select!");
@@ -77,13 +68,19 @@ void PatchAPFS(void *_user, KernelPatcher &patcher, size_t index, mach_vm_addres
 			}
 		}
 		if (getKernelVersion() >= KernelVersion::Sonoma) {
-			KernelPatcher::RouteRequest req("_apfs_mount_upgrade_checks", RetZero);
-			if (!patcher.routeMultiple(index, &req, 1))
-				panic("Failed to route apfs_mount_upgrade_checks!");
+			auto apfs_mount_upgrade_checks = patcher.solveSymbol(index, "_apfs_mount_upgrade_checks");
+			MachInfo::setKernelWriting(true, KernelPatcher::kernelWriteLock);
+			for (int i = 0; i < arrsize(retZero); i++) {
+				*(uint8_t *)(apfs_mount_upgrade_checks + i) = retZero[i];
+			}
+			MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 		} else if (getKernelVersion() == KernelVersion::Ventura){
-			KernelPatcher::RouteRequest req("_apfs_allow_root_update", RetOne);
-			if (!patcher.routeMultiple(index, &req, 1))
-				panic("Failed to route apfs_allow_root_update!");
+			auto apfs_allow_root_update = patcher.solveSymbol(index, "_apfs_allow_root_update");
+			MachInfo::setKernelWriting(true, KernelPatcher::kernelWriteLock);
+			for (int i = 0; i < arrsize(retZero); i++) {
+				*(uint8_t *)(apfs_allow_root_update + i) = retOne[i];
+			}
+			MachInfo::setKernelWriting(false, KernelPatcher::kernelWriteLock);
 		} else {
 			if (!KernelPatcher::findAndReplaceWithMask((void *) apfs_vfsop_mount, 32768, oldRWPatchOrig, arrsize(oldRWPatchOrig), oldRWPatchMask, arrsize(oldRWPatchMask), oldRWPatchReplace, arrsize(oldRWPatchReplace), oldRWPatchReplaceMask, arrsize(oldRWPatchReplaceMask))) {
 				panic("Failed to patch apfs_vfsop_mount RW patch!");

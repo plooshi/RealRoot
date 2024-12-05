@@ -362,7 +362,7 @@
 				MODULE_NAME = dev.ploosh.RealRoot;
 				MODULE_START = "$(PRODUCT_NAME)_kern_start";
 				MODULE_STOP = "$(PRODUCT_NAME)_kern_stop";
-				MODULE_VERSION = 1.0.7;
+				MODULE_VERSION = 1.0.8;
 				OTHER_CFLAGS = (
 					"-mmmx",
 					"-msse",
@@ -378,6 +378,7 @@
 					"-Wno-ossharedptr-misuse",
 					"-Wno-vla",
 					"-masm=intel",
+					"-DLILU_CUSTOM_IOKIT_INIT",
 				);
 				OTHER_LDFLAGS = "-static";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.ploosh.RealRoot;
@@ -411,7 +412,7 @@
 				MODULE_NAME = dev.ploosh.RealRoot;
 				MODULE_START = "$(PRODUCT_NAME)_kern_start";
 				MODULE_STOP = "$(PRODUCT_NAME)_kern_stop";
-				MODULE_VERSION = 1.0.7;
+				MODULE_VERSION = 1.0.8;
 				OTHER_CFLAGS = (
 					"-mmmx",
 					"-msse",
@@ -427,6 +428,7 @@
 					"-Wno-ossharedptr-misuse",
 					"-Wno-vla",
 					"-masm=intel",
+					"-DLILU_CUSTOM_IOKIT_INIT",
 				);
 				OTHER_LDFLAGS = "-static";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.ploosh.RealRoot;

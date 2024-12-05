@@ -3,6 +3,23 @@
 
 void InitRealRoot();
 
+const uint8_t snapshotShc[] = {
+    0x31, 0xc0, // xor eax, eax
+    0x89, 0x42, 0x08, // mov qword ptr [rdx], eax
+    0xc3 // ret
+};
+
+const uint8_t retZero[] = {
+    0x31, 0xc0, // xor eax, eax
+    0xC3 // ret
+};
+
+const uint8_t retOne[] = {
+    0x31, 0xc0, // xor eax, eax
+    0xff, 0xc0, // inc eax
+    0xc3 // ret
+};
+
 const uint8_t pivotRootOrig[] = {
     0xbe, 0x33, 0x68, 0x04, 0x80, // mov esi, 0x80046833
     0x4c, 0x89, 0xe7, // mov rdi, r12
