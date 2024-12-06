@@ -202,7 +202,7 @@ void PatchKernel(void *_user, KernelPatcher &patcher) {
 }
 
 void InitRealRoot() {
-	if (WIOKit::usingPrelinkedCache()) return; // disable in installer/update
+	if (!getKernelBase()) return; // disable in installer/update
 	lilu.onPatcherLoadForce(PatchKernel);
 	lilu.onKextLoadForce(&kextAPFS, 1, PatchAPFS);
 	lilu.onKextLoadForce(&kextSandbox, 1, PatchSandbox);
