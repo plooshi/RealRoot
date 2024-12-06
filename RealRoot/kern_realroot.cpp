@@ -163,16 +163,33 @@ void PatchSandbox(void *_user, KernelPatcher &patcher, size_t index, mach_vm_add
 }
 
 mach_vm_address_t getKernelBase() {
+#ifdef LILU_COMPRESSION_SUPPORT
+	static constexpr const char *prelinkKernelPaths[7] {
+		// This is the usual kernel cache place, which often the best thing to use
+		"/System/Library/Caches/com.apple.kext.caches/Startup/kernelcache",
+		// Otherwise fallback to one of the prelinked kernels
+		// Since we always verify the LC_UUID value, trying the kernels could be done in any order.
+		"/System/Library/PrelinkedKernels/prelinkedkernel", // normal
+		"/macOS Install Data/Locked Files/Boot Files/prelinkedkernel", // 10.13 installer
+		"/com.apple.boot.R/prelinkedkernel", // 10.12+ fusion drive installer
+		"/com.apple.boot.S/System/Library/PrelinkedKernels/prelinkedkernel", // 10.11 fusion drive installer
+		"/com.apple.recovery.boot/prelinkedkernel", // recovery
+		"/kernelcache" // 10.7 installer
+	};
+#endif
+
 	static constexpr const char *kernelPaths[2] {
 		"/System/Library/Kernels/kernel",
 		"/mach_kernel"
 	};
 	static mach_vm_address_t kbase = 0;
 	if (!kbase) {
+		bool usePrelinkedCache = LILU_COMPRESSION_SUPPORT && WIOKit::usingPrelinkedCache();
+		
 		auto info = MachInfo::create(true, "kernel");
 		if (!info) {
 			return 0;
-		} else if ((info->init(kernelPaths, arrsize(kernelPaths), 0, false)) != KERN_SUCCESS) {
+		} else if ((info->init(usePrelinkedCache ? prelinkKernelPaths : kernelPaths, usePrelinkedCache ? arrsize(prelinkKernelPaths) : arrsize(kernelPaths), 0, false)) != KERN_SUCCESS) {
 			return 0;
 		}
 		
@@ -182,6 +199,7 @@ mach_vm_address_t getKernelBase() {
 	}
 	return kbase;
 }
+
 
 void PatchKernel(void *_user, KernelPatcher &patcher) {
 	auto searchBase = patcher.solveSymbol(0, "_pivot_root");
@@ -202,7 +220,6 @@ void PatchKernel(void *_user, KernelPatcher &patcher) {
 }
 
 void InitRealRoot() {
-	if (!getKernelBase()) return; // disable in installer/update
 	lilu.onPatcherLoadForce(PatchKernel);
 	lilu.onKextLoadForce(&kextAPFS, 1, PatchAPFS);
 	lilu.onKextLoadForce(&kextSandbox, 1, PatchSandbox);
