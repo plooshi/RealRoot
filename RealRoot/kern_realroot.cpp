@@ -220,6 +220,7 @@ void PatchKernel(void *_user, KernelPatcher &patcher) {
 }
 
 void InitRealRoot() {
+	if (checkKernelArgument("-bsrootdmg")) return;
 	lilu.onPatcherLoadForce(PatchKernel);
 	lilu.onKextLoadForce(&kextAPFS, 1, PatchAPFS);
 	lilu.onKextLoadForce(&kextSandbox, 1, PatchSandbox);
